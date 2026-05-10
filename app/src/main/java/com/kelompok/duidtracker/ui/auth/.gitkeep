@@ -1,0 +1,48 @@
+### 📘 DOKUMENTASI MENDALAM: Folder ui/auth
+Folder ini adalah "Pintu Gerbang" aplikasi. Di sini kita mengatur bagaimana pengguna masuk (Login) atau membuat identitas baru (Register).
+
+---
+
+#### 🚪 1. LoginScreen.kt (Layar Masuk)
+**Analogi:** Bayangkan sebuah **Resepsionis di Gedung Perkantoran**.
+*   **Formulir (Email & Password):** Adalah buku tamu yang harus Anda isi.
+*   **Resepsionis (ViewModel):** Orang yang mengambil buku tamu Anda dan mencocokkannya dengan database di komputer pusat (Firebase).
+*   **Status (State):** Resepsionis memberi tahu Anda: "Tunggu sebentar (Loading)", "Silakan masuk (Success)", atau "Maaf, data tidak cocok (Error)".
+
+**Penjelasan Alur Kode & Logic per Bagian:**
+1.  **Observasi State (`collectAsStateWithLifecycle`)**:
+    - **Logic:** Menghubungkan "Pikiran" aplikasi (ViewModel) ke "Mata" pengguna (UI).
+    - **Guna:** Jika di pikiran aplikasi statusnya "Berhasil", baris ini mengirim sinyal ke layar untuk berubah.
+    - **Baris Penting:** `val uiState by viewModel.uiState.collectAsStateWithLifecycle()` - Ini memastikan layar selalu update sesuai data terbaru dari server.
+2.  **Input Sementara (`remember` & `mutableStateOf`)**:
+    - **Logic:** Kotak penyimpanan memori jangka pendek.
+    - **Guna:** Menyimpan teks yang Anda ketik (Email/Pass). Tanpa ini, setiap kali layar "berkedip" (recompose), teks yang Anda ketik akan terhapus.
+3.  **Efek Samping Navigasi (`LaunchedEffect`)**:
+    - **Logic:** Pemicu otomatis berdasarkan kondisi tertentu.
+    - **Guna:** Begitu status login berubah jadi "Sukses", dia langsung "menendang" pengguna ke halaman utama. Ini dilakukan di luar alur gambar UI agar tidak terjadi error navigasi berulang.
+4.  **Keamanan Visual (`PasswordVisualTransformation`)**:
+    - **Logic:** Sensor otomatis.
+    - **Guna:** Mengubah huruf asli menjadi bintang (*) atau titik. Logikanya, kita punya satu variabel boolean (`passwordVisible`) yang menentukan apakah sensor ini aktif atau tidak saat ikon mata diklik.
+5.  **Tombol Cerdas (`Button(enabled = ...)`**:
+    - **Logic:** Validasi kesiapan data.
+    - **Guna:** Tombol hanya bisa diklik jika Email & Password tidak kosong. Ini mencegah user mengirim data kosong ke internet (hemat kuota dan cegah error server).
+
+---
+
+#### 📝 2. RegisterScreen.kt (Layar Daftar)
+**Analogi:** Seperti **Mendaftar Jadi Anggota Perpustakaan Baru**.
+*   **Validasi Petugas (App Logic):** Sebelum formulir dikirim, petugas mengecek: "Eh, passwordnya harus sama ya di kedua kotak" dan "Minimal 6 karakter ya".
+
+**Penjelasan Alur Kode & Logic per Bagian:**
+1.  **Validasi Lokal (Pre-Check):**
+    - **Logic:** `if (password != confirmPassword)` dan `if (password.length < 6)`.
+    - **Guna:** Memberikan **Respon Instan**. Kita tidak perlu repot-repot bertanya ke internet (Firebase) untuk tahu bahwa dua kotak password isinya beda. Ini menghemat waktu pengguna secara signifikan.
+2.  **Layar Bisa Digeser (`verticalScroll`)**:
+    - **Logic:** Menyesuaikan ukuran konten dengan layar HP.
+    - **Guna:** Karena formulir daftar panjang (Nama, Email, Pass, Konfirm), saat keyboard muncul, bagian bawah layar akan tertutup. Fungsi ini membuat kita bisa men-scroll layar agar tombol "Daftar" tetap bisa diklik.
+3.  **Prioritas Pesan Error (`localError ?: uiState.errorMessage`)**:
+    - **Logic:** Memilih pesan mana yang paling penting.
+    - **Guna:** Jika user salah ketik di HP, tunjukkan error dari HP dulu. Jika ketikan sudah benar tapi email ternyata sudah dipakai orang lain, baru tunjukkan error dari server (Firebase).
+4.  **Eksekusi Pendaftaran (`viewModel.register`)**:
+    - **Logic:** Mengirim paket data lengkap (Nama, Email, Pass) ke ViewModel.
+    - **Guna:** Memulai proses pembuatan akun ganda (Firebase Auth + Firestore Profile).

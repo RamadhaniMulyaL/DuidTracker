@@ -1,0 +1,20 @@
+### 📦 DOKUMENTASI ENTITY: Lemari Arsip Data
+Folder ini mendefinisikan "Bentuk" data yang kita simpan di dalam memori HP.
+
+#### 🏛️ Analogi: Lemari Arsip
+Bayangkan database adalah sebuah kantor. **Entity** adalah **Format Formulir** yang harus diisi. Tanpa formulir yang jelas, data akan berantakan dan tidak bisa disimpan di laci (Tabel) yang benar.
+
+#### 1. TransactionEntity.kt (Data Transaksi)
+*   **`@Entity(tableName = "transactions")`**: Memberi tahu sistem bahwa ini adalah formulir resmi untuk tabel transaksi.
+*   **`val id: String`**: Seperti nomor seri unik pada struk belanja agar tidak tertukar dengan transaksi lain.
+*   **`val nominal: Double`**: Angka uangnya.
+*   **`toFormattedNominal` (Extension Property)**:
+    *   *Kegunaan:* Mengubah angka mentah (10000) menjadi cantik (Rp 10.000).
+    *   *Logic:* Menggunakan `DecimalFormat` khusus Indonesia (titik sebagai pemisah ribuan). Ini memisahkan data mentah dari tampilan agar UI tidak perlu pusing menghitung format uang.
+
+#### 2. GroupEntity.kt (Data Grup)
+*   **`membersJson: String`**:
+    *   *Masalah:* Database Room tidak bisa menyimpan daftar (List) secara langsung.
+    *   *Solusi:* Kita "memadatkan" daftar nama menjadi satu teks panjang (JSON).
+    *   *Analogi:* Seperti memasukkan 5 baju ke dalam satu kantong plastik (String) agar muat di dalam satu laci kecil.
+*   **`getMembersList()`**: Membuka "kantong plastik" tadi menggunakan Gson agar kita bisa melihat daftar nama aslinya lagi.
