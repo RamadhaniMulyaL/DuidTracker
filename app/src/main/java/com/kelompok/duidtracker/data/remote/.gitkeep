@@ -1,0 +1,2 @@
+### FOLDER: data/remote
+Folder ini disiapkan untuk menyimpan API Interface (Retrofit) atau Service Wrapper (Firestore/Firebase) untuk interaksi data dengan server.

@@ -1,0 +1,22 @@
+### 🏠 DOKUMENTASI DATABASE: Pondasi Rumah Data
+Folder ini berisi konfigurasi pusat untuk Database Room.
+
+#### 🏗️ Analogi: Gedung Pusat Arsip
+Jika Entity adalah Formulir dan DAO adalah Pelayan, maka **AppDatabase** adalah **Gedung Pusat Arsip** itu sendiri. Gedung ini harus kokoh, hanya boleh ada satu di kota (Singleton), dan memiliki aturan ketat tentang bagaimana data masuk dan keluar.
+
+#### 1. AppDatabase.kt (Pusat Kendali)
+*   **`@Database(entities = [...], version = 1)`**:
+    *   *Gunanya:* Sertifikat gedung. Ini mendaftarkan semua formulir (Entity) yang boleh disimpan di dalam gedung ini.
+*   **`Singleton Pattern (@Volatile & synchronized)`**:
+    *   *Kegunaan:* Efisiensi & Keamanan.
+    *   *Analogi:* Bayangkan jika ada dua gedung arsip yang menyimpan data yang sama, pasti akan bingung mana yang paling update. Singleton memastikan hanya ada **SATU** instance database.
+    *   *Logic:* `@Volatile` memastikan semua bagian aplikasi melihat data yang sama secara instan. `synchronized` memastikan tidak ada dua orang yang mencoba membangun gedung secara bersamaan (mencegah tabrakan data).
+*   **`fallbackToDestructiveMigration()`**:
+    *   *Kegunaan:* Tombol Reset saat pembangunan.
+    *   *Logic:* Jika kita mengubah struktur formulir (tambah kolom baru), Room akan bingung. Fungsi ini memerintahkan Room: "Hapus saja gedung lama dan bangun baru jika strukturnya berubah." (Sangat berguna saat tahap belajar/development).
+
+#### 2. Converters.kt (Penerjemah Bahasa)
+*   **`@TypeConverter`**:
+    *   *Gunanya:* Menghubungkan dua dunia.
+    *   *Masalah:* Database hanya mengerti angka dan teks sederhana. Dia tidak mengerti daftar (List).
+    *   *Analogi:* Seperti mesin penghancur kertas yang mengubah dokumen (List) menjadi mie panjang (String JSON) agar bisa masuk ke lubang sempit, dan mesin penyusun kembali yang menyusun mie tersebut menjadi dokumen asli saat dibutuhkan.

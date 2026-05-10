@@ -1,0 +1,34 @@
+### 🤝 DOKUMENTASI REPOSITORY: Sang Mediator
+Folder ini bertindak sebagai "Jembatan" atau "Satu-satunya sumber kebenaran" bagi ViewModel.
+
+#### 🕵️ Analogi: Manajer Penjualan
+ViewModel (Pelanggan) tidak perlu tahu barang diambil dari Gudang Lokal (Room) atau Supplier Luar Negeri (Firebase). Pelanggan cukup bilang "Saya mau data X", dan **Manajer Penjualan (Repository)** yang akan mencarikan cara terbaik untuk mendapatkannya.
+
+---
+
+#### 🔐 1. AuthRepository.kt (Pusat Keamanan)
+**Gunanya:** Mengurus segala hal tentang identitas pengguna, mulai dari mendaftar, masuk, hingga keluar.
+
+**Penjelasan Logic & Alur Kode:**
+1.  **`suspend fun register(...)`**:
+    *   *Alur:* Memanggil Firebase Auth -> Jika sukses, ambil `uid` -> Buat Map data profil -> Simpan ke Firestore.
+    *   *Logic:* Kita menggunakan **Double-Save**. Kenapa? Karena Firebase Auth hanya menyimpan email & password. Kita butuh Firestore untuk menyimpan nama lengkap dan tanggal join agar bisa ditampilkan di Profil.
+2.  **`suspend fun login(...)`**:
+    *   *Logic:* Menggunakan fungsi bawaan Firebase. Alurnya: Kirim email/pass -> Tunggu validasi cloud -> Kembalikan status.
+3.  **`AuthResult<T>` (Sealed Class)**:
+    *   *Gunanya:* Sebagai "Amplop" hasil.
+    *   *Logic:* Daripada hanya mengembalikan data, kita bungkus dengan status `Success`, `Error`, atau `Loading`. Ini memudahkan UI untuk tahu kapan harus memunculkan animasi putar atau pesan merah.
+4.  **`.await()` (Coroutines)**:
+    *   *Gunanya:* Menghilangkan "Callback Hell".
+    *   *Logic:* Secara default, Firebase bekerja dengan sistem "Tunggu saya panggil ya". Dengan `.await()`, kita memaksa kode untuk "Berhenti di baris ini sampai data datang", membuat kode terlihat rapi seperti membaca buku (linear).
+5.  **`mapFirebaseAuthError`**:
+    *   *Gunanya:* Penerjemah Bahasa Robot.
+    *   *Logic:* Firebase memberikan error seperti `ERROR_INVALID_EMAIL`. Kita mengubahnya jadi "Format email salah" agar pengguna tidak bingung.
+
+---
+
+#### 🛠️ Alur Kerja Umum:
+1. ViewModel memanggil fungsi di Repository.
+2. Repository melakukan operasi berat (baca DB / Internet).
+3. Repository membungkus hasilnya ke dalam `AuthResult`.
+4. ViewModel menerima "Amplop" tersebut dan meneruskannya ke UI.

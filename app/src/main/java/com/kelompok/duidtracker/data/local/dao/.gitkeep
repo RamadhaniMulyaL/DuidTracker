@@ -1,0 +1,31 @@
+### 📜 DOKUMENTASI DAO: Sang Pelayan Database (Waiter)
+Folder ini berisi "Kontrak Kerja" atau daftar perintah yang bisa kita berikan kepada Database.
+
+#### 🤵 Analogi: Pelayan Restoran
+Database adalah **Dapur (Kitchen)** yang penuh dengan bahan makanan (Data). Anda sebagai pembeli tidak boleh masuk ke dapur. Anda harus memesan lewat **Pelayan (DAO)**.
+- Jika Anda bilang "Tolong ambilkan semua transaksi", Pelayan akan lari ke dapur dan membawakannya untuk Anda.
+- Jika Anda bilang "Simpan catatan ini", Pelayan akan menaruhnya di tempat yang tepat di dapur.
+
+---
+
+#### 1. TransactionDao.kt (Pelayan Transaksi)
+**Kegunaan:** Jembatan untuk mengelola catatan uang masuk dan keluar.
+
+**Penjelasan Alur & Logic:**
+*   **`@Upsert` (Update or Insert):**
+    *   *Logic:* Cek ID. Jika ID sudah ada di dapur, timpa data lama. Jika belum ada, buat baris baru.
+    *   *Gunanya:* Agar kita tidak perlu membuat dua fungsi berbeda untuk "Tambah" dan "Edit". Cukup satu fungsi untuk keduanya.
+*   **`Flow<List<TransactionEntity>>`**:
+    *   *Logic:* Aliran data yang tidak pernah putus (Stream).
+    *   *Analogi:* Seperti **Live Streaming**. Jika koki di dapur menambah makanan baru, Anda yang duduk di meja makan langsung bisa melihatnya di layar tanpa harus bertanya lagi. UI aplikasi akan otomatis berubah saat data di database berubah.
+*   **`SUM(nominal)`**:
+    *   *Logic:* Perintah kalkulator di level database.
+    *   *Gunanya:* Sangat cepat karena database dioptimalkan untuk menghitung angka. Jauh lebih baik daripada mengambil 1000 data lalu menghitungnya manual di HP.
+
+#### 2. GroupDao.kt (Pelayan Grup)
+*   **`LIKE '%' || :userId || '%'`**:
+    *   *Logic:* Mencari kata di dalam kalimat.
+    *   *Kegunaan:* Karena daftar anggota grup disimpan sebagai satu baris teks panjang (JSON), kueri ini bertugas mencari: "Apakah ID user saya ada di dalam tumpukan teks anggota grup ini?".
+*   **`suspend fun`**:
+    *   *Logic:* Fungsi yang bisa "menunggu".
+    *   *Gunanya:* Operasi database bisa memakan waktu. `suspend` memastikan aplikasi tidak "hang" atau macet saat sedang menulis data ke memori.
