@@ -15,7 +15,10 @@ import androidx.compose.runtime.* // Library inti untuk mengelola state/data yan
 import androidx.compose.ui.Alignment // Mengatur posisi perataan (tengah, kiri, kanan)
 import androidx.compose.ui.Modifier // Alat untuk memodifikasi tampilan, ukuran, dan perilaku komponen
 import androidx.compose.ui.unit.dp // Satuan ukuran standar Android (Density-independent Pixels)
+import com.kelompok.duidtracker.ui.personal.PersonalScreen // Layar transaksi pribadi
 import com.kelompok.duidtracker.viewmodel.AuthViewModel // Otak yang mengelola status autentikasi
+import com.kelompok.duidtracker.viewmodel.GroupViewModel // Otak yang mengelola data kelompok
+import com.kelompok.duidtracker.viewmodel.TransactionViewModel // Otak yang mengelola data transaksi
 
 /**
  * Kelas untuk mendefinisikan item-item di bilah navigasi bawah.
@@ -38,72 +41,70 @@ sealed class BottomNavScreen(
 @Composable
 fun MainScreen(
     authViewModel: AuthViewModel, // Digunakan untuk aksi logout di tab profil
+    transactionViewModel: TransactionViewModel, // Digunakan di layar Pribadi
+    groupViewModel: GroupViewModel, // Digunakan di layar Grup
     onNavigateToGroupDetail: (String) -> Unit, // Fungsi untuk berpindah ke detail grup
     onLogout: () -> Unit // Fungsi untuk menendang user kembali ke layar login
 ) {
     // Menyimpan status menu mana yang sedang dipilih oleh pengguna (Default: Pribadi)
-    // Analogi: Seperti mengingat posisi gigi persneling mobil.
     var selectedScreen by remember { mutableStateOf<BottomNavScreen>(BottomNavScreen.Personal) }
 
-    // Struktur dasar halaman Material3 yang menyediakan slot untuk Bar Atas, Bar Bawah, dll.
+    // Struktur dasar halaman Material3
     Scaffold(
         bottomBar = {
-            // Bilah navigasi yang menempel di bawah layar
+            // Bilah navigasi bawah
             NavigationBar {
-                // Daftar menu yang ingin ditampilkan
                 val items = listOf(
                     BottomNavScreen.Personal,
                     BottomNavScreen.Groups,
                     BottomNavScreen.Profile
                 )
-                // Melakukan perulangan untuk membuat setiap item menu secara otomatis
                 items.forEach { screen ->
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) }, // Menampilkan ikon
-                        label = { Text(screen.title) }, // Menampilkan teks di bawah ikon
-                        selected = selectedScreen == screen, // Menandai menu jika sedang aktif (berubah warna)
-                        onClick = { selectedScreen = screen } // Mengubah menu yang aktif saat diklik
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title) },
+                        selected = selectedScreen == screen,
+                        onClick = { selectedScreen = screen }
                     )
                 }
             }
         }
     ) { innerPadding ->
-        // Konten utama aplikasi yang berubah-ubah sesuai menu yang dipilih
-        // padding(innerPadding) memastikan konten tidak tertutup oleh Navigasi Bawah
+        // Wadah konten utama yang berubah sesuai tab yang dipilih
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center // Selalu letakkan konten di tengah layar
+                .padding(innerPadding)
         ) {
-            // Logika "Switch": Menampilkan layar yang berbeda berdasarkan menu yang diklik
             when (selectedScreen) {
                 is BottomNavScreen.Personal -> {
-                    // Layar untuk mencatat pengeluaran pribadi
-                    Text("Layar Pribadi: Segera Hadir")
+                    // Menampilkan Layar Pribadi yang sesungguhnya (Buku Kas)
+                    PersonalScreen(viewModel = transactionViewModel)
                 }
                 is BottomNavScreen.Groups -> {
-                    // Layar untuk manajemen keuangan kelompok
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Layar Grup: Segera Hadir")
-                        Spacer(modifier = Modifier.height(16.dp))
-                        // Tombol simulasi untuk mencoba navigasi ke detail grup
-                        Button(onClick = { onNavigateToGroupDetail("sample_group_id") }) {
-                            Text("Ke Detail Grup Contoh")
+                    // Placeholder Layar Grup
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Layar Grup: Segera Hadir")
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = { onNavigateToGroupDetail("sample_group_id") }) {
+                                Text("Ke Detail Grup Contoh")
+                            }
                         }
                     }
                 }
                 is BottomNavScreen.Profile -> {
-                    // Layar untuk pengaturan akun dan logout
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Layar Profil: Segera Hadir")
-                        Spacer(modifier = Modifier.height(16.dp))
-                        // Tombol untuk keluar dari aplikasi
-                        Button(onClick = {
-                            authViewModel.logout() // Hapus sesi di Firebase
-                            onLogout() // Pindah ke layar Login
-                        }) {
-                            Text("Keluar")
+                    // Placeholder Layar Profil
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Layar Profil: Segera Hadir")
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = {
+                                authViewModel.logout()
+                                onLogout()
+                            }) {
+                                Text("Keluar")
+                            }
                         }
                     }
                 }
