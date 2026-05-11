@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "207833494116",
-    "project_id": "unscramble-project-rama",
-    "storage_bucket": "unscramble-project-rama.firebasestorage.app"
+    "project_number": "503028175171",
+    "project_id": "duidtracker",
+    "storage_bucket": "duidtracker.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:207833494116:android:0684d8f30f3d1f866ba571",
+        "mobilesdk_app_id": "1:503028175171:android:ebdddc090ee8efe7c01ff6",
         "android_client_info": {
-          "package_name": "com.example.unscramble"
+          "package_name": "com.kelompok.duidtracker"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBv-MAQRS60KKgJietOF799_qxSqV9PFD4"
+          "current_key": "AIzaSyDu2n6FS6oca-fBSPBDzTeAFkEMfNMnp8g"
         }
       ],
       "services": {
