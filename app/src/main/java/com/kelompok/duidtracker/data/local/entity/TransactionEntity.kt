@@ -9,63 +9,59 @@ import java.util.Locale // Mengatur wilayah (lokasi) untuk standar format (Indon
 
 /**
  * Representasi tabel "transactions" di database lokal.
- * Analogi: Ini adalah "Formulir Catatan Keuangan" yang harus diisi setiap ada uang masuk/keluar.
+ * Sesuai dengan persyaratan:
+ * - Menggunakan UUID sebagai ID (String)
+ * - Mendukung transaksi personal (groupId = null) dan grup
+ * - Memiliki konstanta tipe (Income/Expense)
  */
-@Entity(tableName = "transactions") // Mendefinisikan nama tabel di database SQL
+@Entity(tableName = "transactions")
 data class TransactionEntity(
-    @PrimaryKey // Setiap transaksi harus punya ID unik agar tidak tertukar (seperti nomor struk)
-    @ColumnInfo(name = "id") // Nama kolom di database: id
-    val id: String, // Menggunakan UUID (String unik) sebagai identitas transaksi
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String, // UUID, not auto-generate
 
-    @ColumnInfo(name = "user_id") // Nama kolom di database: user_id
-    val userId: String, // ID pemilik transaksi agar data tidak campur dengan user lain
+    @ColumnInfo(name = "user_id")
+    val userId: String,
 
-    @ColumnInfo(name = "group_id") // Nama kolom di database: group_id
-    val groupId: String?, // ID grup jika transaksi dilakukan bersama (nullable/boleh kosong jika pribadi)
+    @ColumnInfo(name = "group_id")
+    val groupId: String?, // Nullable, null means personal
 
-    @ColumnInfo(name = "type") // Nama kolom di database: type
-    val type: String, // Tipe transaksi: "income" (masuk) atau "expense" (keluar)
+    @ColumnInfo(name = "type")
+    val type: String, // "income" or "expense"
 
-    @ColumnInfo(name = "nama") // Nama kolom di database: nama
-    val nama: String, // Keterangan atau nama transaksi (misal: "Beli Bakso")
+    @ColumnInfo(name = "nama")
+    val nama: String,
 
-    @ColumnInfo(name = "nominal") // Nama kolom di database: nominal
-    val nominal: Double, // Jumlah uang dalam angka desimal
+    @ColumnInfo(name = "nominal")
+    val nominal: Double,
 
-    @ColumnInfo(name = "kategori") // Nama kolom di database: kategori
-    val kategori: String, // Kategori transaksi (misal: "Makanan", "Transportasi")
+    @ColumnInfo(name = "kategori")
+    val kategori: String,
 
-    @ColumnInfo(name = "tanggal") // Nama kolom di database: tanggal
-    val tanggal: Long, // Waktu transaksi terjadi dalam format milidetik (epoch time)
+    @ColumnInfo(name = "tanggal")
+    val tanggal: Long, // Epoch milliseconds
 
-    @ColumnInfo(name = "created_at") // Nama kolom di database: created_at
-    val createdAt: Long // Waktu kapan catatan ini dibuat di aplikasi
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long // Epoch milliseconds
 ) {
-    // Objek pendamping untuk menyimpan nilai tetap (konstanta) agar tidak salah ketik
+    // Companion object untuk menyimpan konstanta tipe transaksi
     companion object {
-        const val TYPE_INCOME = "income" // Penanda untuk uang masuk
-        const val TYPE_EXPENSE = "expense" // Penanda untuk uang keluar
+        const val TYPE_INCOME = "income"
+        const val TYPE_EXPENSE = "expense"
     }
 }
 
 /**
- * Properti tambahan untuk mengubah angka nominal menjadi format Rupiah yang cantik.
- * Analogi: Seperti mesin kasir yang mengubah angka "5000" menjadi "Rp 5.000".
+ * Properti ekstensi untuk mengubah angka nominal menjadi format Rupiah yang cantik.
+ * Contoh: Rp 1.500.000
  */
 val TransactionEntity.toFormattedNominal: String
     get() {
-        // Mengatur standar wilayah ke Indonesia
-        val localeID = Locale("in", "ID")
-        
-        // Mengatur simbol ribuan menggunakan titik (.) dan desimal menggunakan koma (,) sesuai standar ID
+        val localeID = Locale("id", "ID")
         val symbols = DecimalFormatSymbols(localeID).apply {
             groupingSeparator = '.'
             decimalSeparator = ','
         }
-        
-        // Membuat pola format: #,### (angka dengan pemisah ribuan)
         val decimalFormat = DecimalFormat("#,###", symbols)
-        
-        // Mengembalikan teks final dengan awalan "Rp "
         return "Rp ${decimalFormat.format(nominal)}"
     }

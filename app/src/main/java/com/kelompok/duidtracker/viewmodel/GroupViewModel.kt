@@ -1,152 +1,220 @@
 package com.kelompok.duidtracker.viewmodel
 
-import androidx.lifecycle.ViewModel // Class induk untuk menyimpan data UI agar tahan banting saat layar berputar
-import androidx.lifecycle.ViewModelProvider // Alat bantu untuk menciptakan instance ViewModel
-import androidx.lifecycle.viewModelScope // Ruang kerja khusus untuk menjalankan proses di latar belakang
-import com.kelompok.duidtracker.data.local.entity.GroupEntity // Formulir data untuk sebuah Kelompok/Grup
-import com.kelompok.duidtracker.data.repository.GroupRepository // Manajer yang mengatur aliran data Grup
-import kotlinx.coroutines.flow.MutableStateFlow // Pipa data internal yang isinya bisa kita ubah-ubah
-import kotlinx.coroutines.flow.StateFlow // Pipa data publik yang hanya bisa dibaca oleh layar (UI)
-import kotlinx.coroutines.flow.asStateFlow // Mengubah pipa "Bisa Diubah" menjadi "Hanya Baca"
-import kotlinx.coroutines.flow.update // Fungsi untuk memperbarui isi data di dalam pipa secara aman
-import kotlinx.coroutines.launch // Menjalankan perintah di jalur cepat (thread background)
-import java.util.UUID // Alat pembuat ID unik (seperti nomor seri acak)
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.kelompok.duidtracker.data.local.entity.GroupEntity
+import com.kelompok.duidtracker.data.local.entity.TransactionEntity
+import com.kelompok.duidtracker.data.repository.AuthRepository
+import com.kelompok.duidtracker.data.repository.GroupRepository
+import com.kelompok.duidtracker.data.repository.TransactionRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
- * Data class untuk merangkum seluruh kondisi tampilan pada menu Grup.
- * Analogi: Seperti layar monitor di ruang kontrol yang menampilkan daftar grup dan status sistem.
+ * UI State untuk daftar grup.
  */
-data class GroupUiState(
-    val groups: List<GroupEntity> = emptyList(), // Daftar grup yang diikuti pengguna
-    val isLoading: Boolean = false, // Indikator jika sistem sedang sibuk (misal: saat gabung grup)
-    val errorMessage: String? = null, // Pesan teks yang muncul jika ada masalah
-    val joinSuccess: Boolean = false // Tanda jika proses bergabung ke grup baru berhasil
+data class GroupListUiState(
+    val groups: List<GroupEntity> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
 )
 
 /**
- * Otak yang mengelola logika interaksi Grup (Buat Grup & Gabung Grup).
- * Analogi: Seperti "Sekretaris Kelompok" yang mencatat pendaftaran anggota dan membuat kelompok baru.
+ * UI State untuk detail satu grup.
+ */
+data class GroupDetailUiState(
+    val group: GroupEntity? = null,
+    val transactions: List<TransactionEntity> = emptyList(),
+    val totalIncome: Double = 0.0,
+    val totalExpense: Double = 0.0,
+    val balance: Double = 0.0,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val currentUserId: String = ""
+)
+
+/**
+ * ViewModel untuk mengelola seluruh logika fitur Grup.
  */
 class GroupViewModel(
-    private val repository: GroupRepository, // Akses ke manajer logistik data grup
-    private val userId: String // ID pengguna agar sekretaris tahu siapa yang sedang bekerja
+    private val groupRepo: GroupRepository,
+    private val txRepo: TransactionRepository,
+    private val authRepo: AuthRepository
 ) : ViewModel() {
 
-    // Pipa data rahasia untuk menyimpan status terkini
-    private val _uiState = MutableStateFlow(GroupUiState())
-    // Pipa data yang dipasang ke layar agar UI bisa otomatis update
-    val uiState: StateFlow<GroupUiState> = _uiState.asStateFlow()
+    private val _listUiState = MutableStateFlow(GroupListUiState())
+    val listUiState: StateFlow<GroupListUiState> = _listUiState.asStateFlow()
+
+    private val _detailUiState = MutableStateFlow(GroupDetailUiState())
+    val detailUiState: StateFlow<GroupDetailUiState> = _detailUiState.asStateFlow()
+
+    private var collectionJob: Job? = null
 
     init {
-        // Alur: Begitu aplikasi dibuka, sekretaris langsung mengambil daftar grup dari laci penyimpanan
-        loadUserGroups()
+        refreshData()
     }
 
     /**
-     * Mengambil daftar grup yang diikuti user secara real-time.
+     * Menyegarkan data grup berdasarkan user yang aktif.
      */
-    private fun loadUserGroups() {
-        viewModelScope.launch {
-            // Memasang kran data (Flow) ke database lokal HP
-            repository.getGroupsForUser(userId).collect { list ->
-                // Setiap ada perubahan data grup di HP, daftar di layar langsung diperbarui
-                _uiState.update { it.copy(groups = list) }
+    fun refreshData() {
+        val userId = authRepo.getCurrentUserId()
+        
+        if (userId.isNullOrBlank()) {
+            clearState()
+            return
+        }
+
+        // Hentikan proses lama
+        groupRepo.stopListener()
+        collectionJob?.cancel()
+        
+        _detailUiState.update { it.copy(currentUserId = userId) }
+
+        // Mulai sinkronisasi cloud real-time
+        groupRepo.startFirestoreListener(userId)
+
+        collectionJob = viewModelScope.launch {
+            _listUiState.update { it.copy(isLoading = true) }
+            groupRepo.getAllGroups(userId).collect { groups ->
+                _listUiState.update { it.copy(groups = groups, isLoading = false) }
             }
         }
     }
 
     /**
-     * Logika untuk menciptakan kelompok baru.
+     * Membersihkan state dan menghentikan sinkronisasi (saat logout).
      */
-    fun createGroup(name: String, description: String, budget: Double) {
-        viewModelScope.launch {
-            // Nyalakan indikator sibuk (loading)
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            
-            // Membuat identitas grup baru
-            val newGroup = GroupEntity(
-                id = UUID.randomUUID().toString(), // Membuat ID unik otomatis
-                name = name,
-                description = description,
-                ownerId = userId, // Orang yang membuat grup otomatis jadi ketua (Owner)
-                membersJson = "[\"$userId\"]", // Menambahkan si pembuat sebagai anggota pertama
-                budget = budget,
-                icon = "default_icon", // Ikon standar
-                inviteCode = generateInviteCode(), // Membuat kode rahasia untuk mengajak teman
-                createdAt = System.currentTimeMillis() // Mencatat waktu pembuatan
-            )
+    fun clearState() {
+        groupRepo.stopListener()
+        collectionJob?.cancel()
+        _listUiState.update { GroupListUiState() }
+        _detailUiState.update { GroupDetailUiState() }
+    }
 
-            // Mengirim pendaftaran grup baru ke manajer data
-            val result = repository.createGroup(newGroup)
-            
-            // Menangani hasil pendaftaran
-            if (result.isSuccess) {
-                _uiState.update { it.copy(isLoading = false) }
-            } else {
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false, 
-                        errorMessage = "Gagal membuat grup: ${result.exceptionOrNull()?.message}" 
-                    )
+    fun createGroup(name: String, description: String, budget: Double, icon: String) {
+        viewModelScope.launch {
+            _listUiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val result = groupRepo.createGroup(name, description, budget, icon)
+            if (result.isFailure) {
+                _listUiState.update { 
+                    it.copy(errorMessage = result.exceptionOrNull()?.message, isLoading = false) 
                 }
+            } else {
+                _listUiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
-    /**
-     * Logika untuk bergabung ke grup orang lain menggunakan kode unik.
-     */
     fun joinGroup(inviteCode: String) {
         viewModelScope.launch {
-            // Nyalakan indikator sibuk
-            _uiState.update { it.copy(isLoading = true, errorMessage = null, joinSuccess = false) }
-            
-            // Minta manajer data untuk mendaftarkan user ke grup cloud lewat kode tersebut
-            val result = repository.joinGroup(inviteCode)
-            
-            if (result.isSuccess) {
-                // Jika sukses, nyalakan tanda berhasil agar UI bisa memberi selamat atau pindah layar
-                _uiState.update { it.copy(isLoading = false, joinSuccess = true) }
-            } else {
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false, 
-                        errorMessage = result.exceptionOrNull()?.message ?: "Gagal bergabung" 
-                    )
+            _listUiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val result = groupRepo.joinGroupByCode(inviteCode)
+            if (result.isFailure) {
+                _listUiState.update { 
+                    it.copy(errorMessage = result.exceptionOrNull()?.message, isLoading = false) 
                 }
+            } else {
+                _listUiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
-    /**
-     * Fungsi sederhana untuk membuat kode unik 6 karakter.
-     * Analogi: Seperti membuat password acak untuk kunci pintu grup.
-     */
-    private fun generateInviteCode(): String {
-        return UUID.randomUUID().toString().take(6).uppercase()
+    fun loadGroupDetail(groupId: String) {
+        viewModelScope.launch {
+            _detailUiState.update { it.copy(isLoading = true, errorMessage = null) }
+            combine(
+                groupRepo.getGroupById(groupId),
+                txRepo.getGroupTransactions(groupId)
+            ) { group, transactions ->
+                val income = transactions.filter { it.type == TransactionEntity.TYPE_INCOME }.sumOf { it.nominal }
+                val expense = transactions.filter { it.type == TransactionEntity.TYPE_EXPENSE }.sumOf { it.nominal }
+                
+                _detailUiState.update { 
+                    it.copy(
+                        group = group,
+                        transactions = transactions,
+                        totalIncome = income,
+                        totalExpense = expense,
+                        balance = income - expense,
+                        isLoading = false
+                    )
+                }
+            }.collect()
+        }
     }
 
-    /**
-     * Menghapus pesan error agar layar kembali bersih.
-     */
+    fun addGroupTransaction(groupId: String, nama: String, nominal: Double, kategori: String, type: String, tanggal: Long) {
+        val userId = authRepo.getCurrentUserId() ?: return
+        val transaction = TransactionEntity(
+            id = UUID.randomUUID().toString(),
+            userId = userId,
+            groupId = groupId,
+            type = type,
+            nama = nama,
+            nominal = nominal,
+            kategori = kategori,
+            tanggal = tanggal,
+            createdAt = System.currentTimeMillis()
+        )
+        
+        viewModelScope.launch {
+            _detailUiState.update { it.copy(errorMessage = null) }
+            val result = txRepo.addTransaction(transaction)
+            if (result.isFailure) {
+                _detailUiState.update { it.copy(errorMessage = "Gagal menambah transaksi: ${result.exceptionOrNull()?.message}") }
+            }
+        }
+    }
+
+    fun deleteGroupTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch {
+            _detailUiState.update { it.copy(errorMessage = null) }
+            val result = txRepo.deleteTransaction(transaction)
+            if (result.isFailure) {
+                _detailUiState.update { it.copy(errorMessage = "Gagal menghapus: ${result.exceptionOrNull()?.message}") }
+            }
+        }
+    }
+
+    fun leaveGroup(groupId: String) {
+        viewModelScope.launch {
+            groupRepo.leaveGroup(groupId)
+        }
+    }
+
+    fun deleteGroup(groupId: String) {
+        viewModelScope.launch {
+            groupRepo.deleteGroup(groupId)
+        }
+    }
+
+    fun resetBudget(groupId: String, newBudget: Double) {
+        viewModelScope.launch {
+            groupRepo.resetBudget(groupId, newBudget)
+        }
+    }
+
     fun clearError() {
-        _uiState.update { it.copy(errorMessage = null) }
+        _detailUiState.update { it.copy(errorMessage = null) }
+        _listUiState.update { it.copy(errorMessage = null) }
     }
 
-    /**
-     * Perakit (Factory) untuk menciptakan GroupViewModel.
-     * Analogi: Bengkel perakit sekretaris kelompok yang membekali sekretaris dengan alat yang tepat.
-     */
+    fun calculateSplit(total: Double, people: Int): Double {
+        return if (people > 0) total / people else 0.0
+    }
+
     class Factory(
-        private val repository: GroupRepository, 
-        private val userId: String
+        private val groupRepo: GroupRepository,
+        private val txRepo: TransactionRepository,
+        private val authRepo: AuthRepository
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(GroupViewModel::class.java)) {
-                return GroupViewModel(repository, userId) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class")
+            return GroupViewModel(groupRepo, txRepo, authRepo) as T
         }
     }
 }
