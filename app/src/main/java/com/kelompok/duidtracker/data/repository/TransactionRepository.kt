@@ -2,6 +2,7 @@ package com.kelompok.duidtracker.data.repository
 
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.kelompok.duidtracker.data.local.dao.TransactionDao
@@ -29,6 +30,7 @@ class TransactionRepository(
 
     /**
      * Memulai pendengar Firestore untuk user tertentu.
+     * FIX: Menggunakan documentChanges untuk menangani penghapusan (Issue: Stale Cache).
      */
     fun startFirestoreListener(userId: String) {
         stopListener() 
@@ -44,8 +46,18 @@ class TransactionRepository(
                 }
                 
                 repositoryScope.launch {
-                    snapshots.documents.forEach { doc ->
-                        doc.toTransactionEntity()?.let { dao.upsert(it) }
+                    snapshots.documentChanges.forEach { change ->
+                        val transaction = change.document.toTransactionEntity() ?: return@forEach
+                        
+                        when (change.type) {
+                            DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> {
+                                dao.upsert(transaction)
+                            }
+                            DocumentChange.Type.REMOVED -> {
+                                dao.delete(transaction)
+                                Log.d("TX_AUDIT", "Sync: Deleted local transaction ${transaction.id}")
+                            }
+                        }
                     }
                 }
             }
@@ -134,7 +146,6 @@ class TransactionRepository(
 
 /**
  * Extension untuk konversi ke Map Firestore.
- * PENTING: Pastikan field names di sini sama persis dengan yang ada di Security Rules.
  */
 fun TransactionEntity.toMap(): Map<String, Any?> {
     return mapOf(

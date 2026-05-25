@@ -21,36 +21,37 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * Dialog untuk menambah transaksi baru (Pribadi).
- * Fitur:
- * - Pemilih tipe (Pemasukan/Pengeluaran).
- * - Dropdown kategori dinamis.
- * - Pemilih tanggal (DatePicker).
+ * Dialog untuk menambah transaksi baru (Pribadi & Grup).
+ * FIX #2: Tambah parameter prefillNominal untuk integrasi SplitBill.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionDialog(
     onDismiss: () -> Unit,
-    onConfirm: (nama: String, nominal: Double, kategori: String, type: String, tanggal: Long) -> Unit
+    onConfirm: (nama: String, nominal: Double, kategori: String, type: String, tanggal: Long) -> Unit,
+    prefillNominal: Double? = null // FIX #2: prefill dari SplitBillDialog
 ) {
-    // State internal
     var nama by remember { mutableStateOf("") }
-    var nominalString by remember { mutableStateOf("") }
+
+    // FIX #2: Pakai prefillNominal sebagai nilai awal jika ada
+    var nominalString by remember {
+        mutableStateOf(prefillNominal?.toLong()?.toString() ?: "")
+    }
+
     var type by remember { mutableStateOf(TransactionEntity.TYPE_EXPENSE) }
-    
+
     val incomeCategories = listOf("Gaji", "Uang Jajan", "Bonus", "Freelance", "Bisnis", "Hadiah", "Lainnya")
     val expenseCategories = listOf("Makanan", "Transportasi", "Belanja", "Hiburan", "Kesehatan", "Tagihan", "Lainnya")
-    
-    var selectedKategori by remember(type) { 
-        mutableStateOf(if (type == TransactionEntity.TYPE_INCOME) incomeCategories[0] else expenseCategories[0]) 
+
+    var selectedKategori by remember(type) {
+        mutableStateOf(if (type == TransactionEntity.TYPE_INCOME) incomeCategories[0] else expenseCategories[0])
     }
-    
+
     var expandedKategori by remember { mutableStateOf(false) }
-    
-    // Date Picker State
+
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var showDatePicker by remember { mutableStateOf(false) }
-    
+
     val formattedDate = remember(datePickerState.selectedDateMillis) {
         val date = Date(datePickerState.selectedDateMillis ?: System.currentTimeMillis())
         SimpleDateFormat("dd MMM yyyy", Locale.forLanguageTag("id-ID")).format(date)
@@ -60,14 +61,10 @@ fun AddTransactionDialog(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("OK")
-                }
+                TextButton(onClick = { showDatePicker = false }) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Batal")
-                }
+                TextButton(onClick = { showDatePicker = false }) { Text("Batal") }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -95,6 +92,16 @@ fun AddTransactionDialog(
                     color = Color(0xFF1565C0)
                 )
 
+                // FIX #2: Tampilkan badge jika nominal dari split bill
+                if (prefillNominal != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Nominal dari Split Bill",
+                        fontSize = 11.sp,
+                        color = Color(0xFF1565C0).copy(alpha = 0.7f)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Type Selector
@@ -103,12 +110,11 @@ fun AddTransactionDialog(
                         TransactionEntity.TYPE_INCOME to "Pemasukan",
                         TransactionEntity.TYPE_EXPENSE to "Pengeluaran"
                     )
-                    
                     types.forEach { (t, label) ->
                         val isSelected = type == t
                         val bgColor = if (isSelected) Color(0xFF1565C0) else Color.Transparent
                         val contentColor = if (isSelected) Color.White else Color(0xFF1565C0)
-                        
+
                         Card(
                             onClick = { type = t },
                             modifier = Modifier
@@ -152,7 +158,6 @@ fun AddTransactionDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Dropdown Kategori
                 ExposedDropdownMenuBox(
                     expanded = expandedKategori,
                     onExpandedChange = { expandedKategori = !expandedKategori },
@@ -172,7 +177,8 @@ fun AddTransactionDialog(
                         expanded = expandedKategori,
                         onDismissRequest = { expandedKategori = false }
                     ) {
-                        val currentCategories = if (type == TransactionEntity.TYPE_INCOME) incomeCategories else expenseCategories
+                        val currentCategories =
+                            if (type == TransactionEntity.TYPE_INCOME) incomeCategories else expenseCategories
                         currentCategories.forEach { category ->
                             DropdownMenuItem(
                                 text = { Text(text = category) },
@@ -205,13 +211,11 @@ fun AddTransactionDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f).padding(end = 8.dp),
                         shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Batal")
-                    }
-                    
+                    ) { Text("Batal") }
+
                     val nominalValue = nominalString.toDoubleOrNull() ?: 0.0
                     val isFormValid = nama.isNotBlank() && nominalValue > 0
-                    
+
                     Button(
                         onClick = {
                             onConfirm(
@@ -226,9 +230,7 @@ fun AddTransactionDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
-                    ) {
-                        Text("Simpan")
-                    }
+                    ) { Text("Simpan") }
                 }
             }
         }

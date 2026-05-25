@@ -1,6 +1,8 @@
 package com.kelompok.duidtracker.data.repository
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -15,9 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
-/**
- * Repository untuk mengelola data Kelompok/Grup.
- */
 class GroupRepository(
     private val dao: GroupDao,
     private val firestore: FirebaseFirestore,
@@ -28,7 +27,8 @@ class GroupRepository(
     private var groupListener: ListenerRegistration? = null
 
     /**
-     * Memantau grup di mana user menjadi anggota.
+     * FIX BUG 1: Pakai documentChanges (bukan documents) agar event
+     * REMOVED dari Firestore ikut ditangani dan grup terhapus dari Room.
      */
     fun startFirestoreListener(userId: String) {
         stopListener()
@@ -37,11 +37,27 @@ class GroupRepository(
         groupListener = groupsRef
             .whereArrayContains("members", userId)
             .addSnapshotListener { snapshots, e ->
-                if (e != null || snapshots == null) return@addSnapshotListener
-                
+                if (e != null || snapshots == null) {
+                    Log.e("GROUP_SYNC", "Listener error: ${e?.message}")
+                    return@addSnapshotListener
+                }
+
                 repositoryScope.launch {
-                    snapshots.documents.forEach { doc ->
-                        doc.toGroupEntity()?.let { dao.upsert(it) }
+                    snapshots.documentChanges.forEach { change ->
+                        when (change.type) {
+                            DocumentChange.Type.ADDED,
+                            DocumentChange.Type.MODIFIED -> {
+                                change.document.toGroupEntity()?.let {
+                                    dao.upsert(it)
+                                    Log.d("GROUP_SYNC", "Upsert group: ${it.id}")
+                                }
+                            }
+                            DocumentChange.Type.REMOVED -> {
+                                // Grup dihapus dari Firestore → hapus dari Room juga
+                                dao.deleteById(change.document.id)
+                                Log.d("GROUP_SYNC", "Deleted group: ${change.document.id}")
+                            }
+                        }
                     }
                 }
             }
@@ -52,13 +68,18 @@ class GroupRepository(
         groupListener = null
     }
 
-    suspend fun createGroup(name: String, description: String, budget: Double, icon: String): Result<GroupEntity> {
+    suspend fun createGroup(
+        name: String,
+        description: String,
+        budget: Double,
+        icon: String
+    ): Result<GroupEntity> {
         return try {
             val userId = auth.currentUser?.uid ?: throw Exception("User tidak terautentikasi")
             val groupId = UUID.randomUUID().toString()
             val inviteCode = generateInviteCode()
             val members = listOf(userId)
-            
+
             val groupEntity = GroupEntity(
                 id = groupId,
                 name = name,
@@ -73,7 +94,6 @@ class GroupRepository(
 
             groupsRef.document(groupId).set(groupEntity.toFirestoreMap(members)).await()
             dao.upsert(groupEntity)
-            
             Result.success(groupEntity)
         } catch (e: Exception) {
             Result.failure(e)
@@ -83,7 +103,7 @@ class GroupRepository(
     suspend fun joinGroupByCode(inviteCode: String): Result<GroupEntity> {
         return try {
             val userId = auth.currentUser?.uid ?: throw Exception("User tidak terautentikasi")
-            
+
             val snapshot = groupsRef.whereEqualTo("inviteCode", inviteCode).get().await()
             if (snapshot.isEmpty) return Result.failure(Exception("Kode undangan tidak valid"))
 
@@ -93,11 +113,10 @@ class GroupRepository(
             if (group.isMember(userId)) return Result.failure(Exception("Kamu sudah bergabung"))
 
             groupsRef.document(group.id).update("members", FieldValue.arrayUnion(userId)).await()
-            
+
             val updatedDoc = groupsRef.document(group.id).get().await()
             val updatedGroup = updatedDoc.toGroupEntity() ?: group
             dao.upsert(updatedGroup)
-
             Result.success(updatedGroup)
         } catch (e: Exception) {
             Result.failure(e)
@@ -119,16 +138,39 @@ class GroupRepository(
         }
     }
 
+    /**
+     * FIX BUG 2: Validasi owner dari Firestore langsung, bukan dari Room.
+     * Kalau dokumen sudah terhapus di Firestore, cukup hapus dari Room saja.
+     */
     suspend fun deleteGroup(groupId: String): Result<Unit> {
         return try {
             val userId = auth.currentUser?.uid ?: throw Exception("User tidak terautentikasi")
-            val group = dao.getGroupByIdOnce(groupId) ?: throw Exception("Grup tidak ditemukan")
-            if (group.ownerId != userId) throw Exception("Hanya pemilik yang bisa menghapus")
 
+            // Ambil data terkini dari Firestore (bukan Room yang mungkin stale)
+            val firestoreDoc = groupsRef.document(groupId).get().await()
+
+            if (!firestoreDoc.exists()) {
+                // Dokumen sudah tidak ada di Firestore (misal dihapus manual)
+                // Cukup bersihkan dari Room lokal
+                Log.w("GROUP_SYNC", "Grup $groupId tidak ada di Firestore, hapus dari Room saja")
+                dao.deleteById(groupId)
+                return Result.success(Unit)
+            }
+
+            // Validasi owner dari data Firestore yang fresh
+            val ownerId = firestoreDoc.getString("ownerId")
+            if (ownerId != userId) throw Exception("Hanya pemilik yang bisa menghapus grup")
+
+            // Hapus dari Firestore dulu, listener akan otomatis hapus dari Room
             groupsRef.document(groupId).delete().await()
-            dao.delete(group)
+
+            // Hapus langsung dari Room juga sebagai safety net
+            // (kalau listener belum keburu nangkap event REMOVED)
+            dao.deleteById(groupId)
+
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("GROUP_SYNC", "deleteGroup failed: ${e.message}")
             Result.failure(e)
         }
     }

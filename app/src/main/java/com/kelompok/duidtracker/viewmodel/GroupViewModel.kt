@@ -13,18 +13,12 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/**
- * UI State untuk daftar grup.
- */
 data class GroupListUiState(
     val groups: List<GroupEntity> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
 
-/**
- * UI State untuk detail satu grup.
- */
 data class GroupDetailUiState(
     val group: GroupEntity? = null,
     val transactions: List<TransactionEntity> = emptyList(),
@@ -36,9 +30,6 @@ data class GroupDetailUiState(
     val currentUserId: String = ""
 )
 
-/**
- * ViewModel untuk mengelola seluruh logika fitur Grup.
- */
 class GroupViewModel(
     private val groupRepo: GroupRepository,
     private val txRepo: TransactionRepository,
@@ -52,29 +43,23 @@ class GroupViewModel(
     val detailUiState: StateFlow<GroupDetailUiState> = _detailUiState.asStateFlow()
 
     private var collectionJob: Job? = null
+    private var detailJob: Job? = null // FIX #1: tracking detail coroutine
 
     init {
         refreshData()
     }
 
-    /**
-     * Menyegarkan data grup berdasarkan user yang aktif.
-     */
     fun refreshData() {
         val userId = authRepo.getCurrentUserId()
-        
         if (userId.isNullOrBlank()) {
             clearState()
             return
         }
 
-        // Hentikan proses lama
         groupRepo.stopListener()
         collectionJob?.cancel()
-        
-        _detailUiState.update { it.copy(currentUserId = userId) }
 
-        // Mulai sinkronisasi cloud real-time
+        _detailUiState.update { it.copy(currentUserId = userId) }
         groupRepo.startFirestoreListener(userId)
 
         collectionJob = viewModelScope.launch {
@@ -85,12 +70,10 @@ class GroupViewModel(
         }
     }
 
-    /**
-     * Membersihkan state dan menghentikan sinkronisasi (saat logout).
-     */
     fun clearState() {
         groupRepo.stopListener()
         collectionJob?.cancel()
+        detailJob?.cancel() // FIX #1: cancel detail job juga
         _listUiState.update { GroupListUiState() }
         _detailUiState.update { GroupDetailUiState() }
     }
@@ -99,12 +82,12 @@ class GroupViewModel(
         viewModelScope.launch {
             _listUiState.update { it.copy(isLoading = true, errorMessage = null) }
             val result = groupRepo.createGroup(name, description, budget, icon)
-            if (result.isFailure) {
-                _listUiState.update { 
-                    it.copy(errorMessage = result.exceptionOrNull()?.message, isLoading = false) 
+            _listUiState.update {
+                if (result.isFailure) {
+                    it.copy(errorMessage = result.exceptionOrNull()?.message, isLoading = false)
+                } else {
+                    it.copy(isLoading = false)
                 }
-            } else {
-                _listUiState.update { it.copy(isLoading = false) }
             }
         }
     }
@@ -113,27 +96,33 @@ class GroupViewModel(
         viewModelScope.launch {
             _listUiState.update { it.copy(isLoading = true, errorMessage = null) }
             val result = groupRepo.joinGroupByCode(inviteCode)
-            if (result.isFailure) {
-                _listUiState.update { 
-                    it.copy(errorMessage = result.exceptionOrNull()?.message, isLoading = false) 
+            _listUiState.update {
+                if (result.isFailure) {
+                    it.copy(errorMessage = result.exceptionOrNull()?.message, isLoading = false)
+                } else {
+                    it.copy(isLoading = false)
                 }
-            } else {
-                _listUiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
+    // FIX #1: detailJob?.cancel() sebelum launch baru
     fun loadGroupDetail(groupId: String) {
-        viewModelScope.launch {
+        detailJob?.cancel()
+        detailJob = viewModelScope.launch {
             _detailUiState.update { it.copy(isLoading = true, errorMessage = null) }
             combine(
                 groupRepo.getGroupById(groupId),
                 txRepo.getGroupTransactions(groupId)
             ) { group, transactions ->
-                val income = transactions.filter { it.type == TransactionEntity.TYPE_INCOME }.sumOf { it.nominal }
-                val expense = transactions.filter { it.type == TransactionEntity.TYPE_EXPENSE }.sumOf { it.nominal }
-                
-                _detailUiState.update { 
+                val income = transactions
+                    .filter { it.type == TransactionEntity.TYPE_INCOME }
+                    .sumOf { it.nominal }
+                val expense = transactions
+                    .filter { it.type == TransactionEntity.TYPE_EXPENSE }
+                    .sumOf { it.nominal }
+
+                _detailUiState.update {
                     it.copy(
                         group = group,
                         transactions = transactions,
@@ -147,7 +136,14 @@ class GroupViewModel(
         }
     }
 
-    fun addGroupTransaction(groupId: String, nama: String, nominal: Double, kategori: String, type: String, tanggal: Long) {
+    fun addGroupTransaction(
+        groupId: String,
+        nama: String,
+        nominal: Double,
+        kategori: String,
+        type: String,
+        tanggal: Long
+    ) {
         val userId = authRepo.getCurrentUserId() ?: return
         val transaction = TransactionEntity(
             id = UUID.randomUUID().toString(),
@@ -160,12 +156,13 @@ class GroupViewModel(
             tanggal = tanggal,
             createdAt = System.currentTimeMillis()
         )
-        
         viewModelScope.launch {
             _detailUiState.update { it.copy(errorMessage = null) }
             val result = txRepo.addTransaction(transaction)
             if (result.isFailure) {
-                _detailUiState.update { it.copy(errorMessage = "Gagal menambah transaksi: ${result.exceptionOrNull()?.message}") }
+                _detailUiState.update {
+                    it.copy(errorMessage = "Gagal menambah transaksi: ${result.exceptionOrNull()?.message}")
+                }
             }
         }
     }
@@ -175,26 +172,44 @@ class GroupViewModel(
             _detailUiState.update { it.copy(errorMessage = null) }
             val result = txRepo.deleteTransaction(transaction)
             if (result.isFailure) {
-                _detailUiState.update { it.copy(errorMessage = "Gagal menghapus: ${result.exceptionOrNull()?.message}") }
+                _detailUiState.update {
+                    it.copy(errorMessage = "Gagal menghapus: ${result.exceptionOrNull()?.message}")
+                }
             }
         }
     }
 
+    // FIX #6 (bonus): tambah error handling leaveGroup & deleteGroup
     fun leaveGroup(groupId: String) {
         viewModelScope.launch {
-            groupRepo.leaveGroup(groupId)
+            val result = groupRepo.leaveGroup(groupId)
+            if (result.isFailure) {
+                _listUiState.update {
+                    it.copy(errorMessage = result.exceptionOrNull()?.message ?: "Gagal keluar dari grup")
+                }
+            }
         }
     }
 
     fun deleteGroup(groupId: String) {
         viewModelScope.launch {
-            groupRepo.deleteGroup(groupId)
+            val result = groupRepo.deleteGroup(groupId)
+            if (result.isFailure) {
+                _listUiState.update {
+                    it.copy(errorMessage = result.exceptionOrNull()?.message ?: "Gagal menghapus grup")
+                }
+            }
         }
     }
 
     fun resetBudget(groupId: String, newBudget: Double) {
         viewModelScope.launch {
-            groupRepo.resetBudget(groupId, newBudget)
+            val result = groupRepo.resetBudget(groupId, newBudget)
+            if (result.isFailure) {
+                _detailUiState.update {
+                    it.copy(errorMessage = result.exceptionOrNull()?.message ?: "Gagal update budget")
+                }
+            }
         }
     }
 
