@@ -1,6 +1,8 @@
 package com.kelompok.duidtracker.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,9 +15,6 @@ import com.kelompok.duidtracker.viewmodel.AuthViewModel
 import com.kelompok.duidtracker.viewmodel.GroupViewModel
 import com.kelompok.duidtracker.viewmodel.TransactionViewModel
 
-/**
- * Definisi rute navigasi aplikasi.
- */
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Register : Screen("register")
@@ -25,10 +24,6 @@ sealed class Screen(val route: String) {
     }
 }
 
-/**
- * Komponen Navigasi Utama.
- * Menghubungkan layar-layar dengan ViewModel yang sesuai.
- */
 @Composable
 fun AppNavigation(
     authViewModel: AuthViewModel,
@@ -36,19 +31,15 @@ fun AppNavigation(
     groupViewModel: GroupViewModel
 ) {
     val navController = rememberNavController()
-    
-    // Tentukan layar awal berdasarkan status login
-    val startDestination = if (authViewModel.uiState.value.isLoggedIn) {
-        Screen.Main.route
-    } else {
-        Screen.Login.route
-    }
+
+    // FIX #3: pakai collectAsStateWithLifecycle agar reaktif, bukan .value
+    val authState by authViewModel.uiState.collectAsStateWithLifecycle()
+    val startDestination = if (authState.isLoggedIn) Screen.Main.route else Screen.Login.route
 
     NavHost(
         navController = navController,
         startDestination = startDestination
     ) {
-        // Layar Login
         composable(Screen.Login.route) {
             LoginScreen(
                 viewModel = authViewModel,
@@ -63,7 +54,6 @@ fun AppNavigation(
             )
         }
 
-        // Layar Register
         composable(Screen.Register.route) {
             RegisterScreen(
                 viewModel = authViewModel,
@@ -78,7 +68,6 @@ fun AppNavigation(
             )
         }
 
-        // Layar Utama (dengan Bottom Nav)
         composable(Screen.Main.route) {
             MainScreen(
                 authViewModel = authViewModel,
@@ -96,7 +85,6 @@ fun AppNavigation(
             )
         }
 
-        // Layar Detail Grup
         composable(
             route = Screen.GroupDetail.route,
             arguments = listOf(navArgument("groupId") { type = NavType.StringType })
