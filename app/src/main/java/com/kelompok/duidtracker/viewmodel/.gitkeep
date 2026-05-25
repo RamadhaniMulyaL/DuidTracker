@@ -1,0 +1,32 @@
+### 🧠 DOKUMENTASI VIEWMODEL: Otak dari Tampilan (Logic Center)
+Folder ini berisi logika bisnis yang mengatur bagaimana data diproses sebelum ditampilkan ke layar.
+
+#### 🎮 Analogi: Konsol Video Game
+Jika Layar HP (UI) adalah **Televisi**, maka **ViewModel** adalah **Mesin Konsolnya (PS/Xbox)**.
+- Televisi hanya menampilkan gambar.
+- Mesin Konsol memproses input dari stick (User), menghitung skor, dan menentukan apa yang harus digambar di TV.
+- Jika TV dimatikan dan dinyalakan lagi, Mesin Konsol tetap ingat di mana posisi karakter Anda (State Persistence).
+
+---
+
+#### 🔐 1. AuthViewModel.kt
+**Kegunaan:** Mengatur status login, pendaftaran, dan pesan error untuk user.
+
+**Penjelasan Alur & Kegunaan Kode:**
+1.  **`AuthUiState` (Data Class)**:
+    - *Gunanya:* Sebagai **Cermin Keadaan**. Ini adalah satu-satunya sumber informasi bagi UI.
+    - *Komponen:* `isLoading` (sedang kerja?), `isSuccess` (berhasil?), `errorMessage` (kenapa gagal?).
+    - *Analogi:* Seperti lampu indikator pada dashboard mobil.
+2.  **`MutableStateFlow` & `StateFlow`**:
+    - *Gunanya:* Pipa data reaktif.
+    - *Logic:* `Mutable` (bisa diubah) disimpan privat agar tidak diacak-acak dari luar. `StateFlow` (read-only) dibuka untuk umum (UI).
+    - *Alur:* Saat login dimulai, kita masukkan "Loading = true" ke pipa ini. UI yang "mengintip" ujung pipa akan langsung melihat perubahan dan menampilkan loading spinner.
+3.  **`viewModelScope.launch`**:
+    - *Gunanya:* Pekerja di balik layar (Background Thread).
+    - *Logic:* Menjalankan perintah berat (seperti cek internet ke Firebase) tanpa membuat aplikasi macet (freeze).
+    - *Sifat:* Jika user menutup aplikasi, `viewModelScope` akan otomatis membatalkan semua pekerjaan yang sedang jalan. Hemat baterai dan memori!
+4.  **`handleResult(result)`**:
+    - *Logic:* Percabangan keputusan. Jika Repository mengembalikan `Success`, kita update state sukses. Jika `Error`, kita ambil pesan errornya dan kirim ke UI.
+5.  **`ViewModelProvider.Factory`**:
+    - *Gunanya:* "Kunci Inggris" untuk membuat ViewModel.
+    - *Logic:* Karena `AuthViewModel` butuh `AuthRepository`, kita tidak bisa membuatnya begitu saja. Factory ini bertugas "merakit" ViewModel dengan memberikan alat-alat (Dependency) yang dibutuhkan.

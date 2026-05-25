@@ -1,0 +1,14 @@
+### FOLDER: ui
+Berisi komponen utama UI dan pengaturan navigasi.
+
+#### 1. AppNavigation.kt
+**Alur Kerja Navigasi:**
+- **Navigation Graph:** Mendefinisikan rute untuk `Login`, `Register`, `Main`, dan `GroupDetail`.
+- **Dynamic Start Destination:** Menentukan layar awal secara dinamis berdasarkan status login user di `AuthViewModel`.
+- **Argument Passing:** Mendukung pengiriman parameter `groupId` ke layar detail grup menggunakan rute string templating.
+
+#### 2. MainScreen.kt
+**Alur Kerja:**
+- **Bottom Navigation:** Mengimplementasikan 3 tab utama: `Pribadi`, `Grup`, dan `Profil`.
+- **Inner State:** Mengelola state internal untuk menentukan konten mana yang aktif di dalam `Scaffold` berdasarkan item yang dipilih di `NavigationBar`.
+- **Placeholder Pattern:** Saat ini menggunakan konten placeholder ("Segera Hadir") yang siap diisi dengan list transaksi dan manajemen grup.

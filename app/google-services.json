@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "503028175171",
+    "project_id": "duidtracker",
+    "storage_bucket": "duidtracker.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:503028175171:android:ebdddc090ee8efe7c01ff6",
+        "android_client_info": {
+          "package_name": "com.kelompok.duidtracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDu2n6FS6oca-fBSPBDzTeAFkEMfNMnp8g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
